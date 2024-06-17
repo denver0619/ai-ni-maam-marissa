@@ -1,7 +1,87 @@
 from tkinter import *
 from tkinter import ttk, messagebox
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset
+import random
 
+class SurvivedModel(nn.Module):
+    def __init__(self, MAXLENGTH=1000):
+        super(SurvivedModel, self).__init__()
+        self.layer1 = nn.Linear(MAXLENGTH, 48)
+        self.layer2 = nn.Linear(48, 1)
+        self.sigmoid = nn.Sigmoid()
+        pass
 
+    def forward(self, x):
+        x = self.sigmoid(self.layer1(x))
+        x = self.layer2(x)
+        x = self.sigmoid(x)
+        return x
+    
+class TitanicSurvivalDatasetTest(Dataset):
+    def __init__(self, test_tensor: torch.Tensor):
+        self.data = test_tensor
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        return self.data.data[index]
+
+# functions for converting data
+MAXLENGTH = 1000
+
+def add_padding(list_item, max=500):
+    result = list_item
+    while len(result) < max:
+        result.append(0)
+    return result
+
+def input_to_ascii(train_list):
+    result = []
+    for train in train_list:
+        # print(train)
+        temp = []
+        for i, item in enumerate(train):
+            current_item = []
+            # print(i, item)
+            if (i != 2):
+                for char in item:
+                    current_item.append(ord(char))
+                
+                current_item = add_padding(current_item, 40)
+            else:
+                for char in item:
+                    current_item.append(ord(char))
+                current_item = add_padding(current_item, 250)
+            current_item.append(-1)
+            temp = temp + current_item
+        add_padding(temp, MAXLENGTH)
+        result.append(temp)
+    return result
+
+# used to set the minimum threshold
+# makes the output to be either on or 0 based on the threshold
+def binary_output(output, minimum_threshold = 0.5):
+    return True if (output>minimum_threshold) else False
+
+# loads the ai model and evaluates the input of the user
+# returns a Boolean of whether the user survived or not
+def inference(user_input: list) -> bool:
+    path_to_model = "machine-learning\Kaggle\pytorch\Titanic - Machine Learning from Disaster\survived_model(0.77033).pt"
+    survived_ai_model: SurvivedModel = torch.load(path_to_model)
+    
+    input = input_to_ascii([user_input])
+    input_tensor = torch.FloatTensor(input)
+    input_dataset = TitanicSurvivalDatasetTest(input_tensor)
+
+    # start the inference
+    survived_ai_model.eval()
+
+    output: torch.Tensor = survived_ai_model(input_dataset.data)
+
+    return binary_output(output.item(), 0.5)
 
 
 def on_save():
@@ -47,11 +127,28 @@ def on_save():
     print("Embark Point:", embark)
     print("-" * 20)
 
-    # SAMPLE OUTPUT
-    status = "ALIVE"  # Replace with your logic to determine survival status
+    
+    user_input = []
+
+    # unnecessary value that is needed for my model
+    # magic number because of unclean training data
+    passenger_id = random.randint(892, 1309)
+    user_input.append(str(passenger_id))
+    user_input.append(str(passenger_class))
+    user_input.append(str(name))
+    user_input.append(str(sex))
+    user_input.append(str(age))
+    user_input.append(str(sibling_spouses_value))
+    user_input.append(str(parents_children_value))
+    user_input.append(str(ticket_number_value))
+    user_input.append(str(fare_value))
+    user_input.append(str(''))
+    user_input.append(str(embark))
+    
+    status = inference(user_input)
 
     # Update Survival Status label text
-    survival_status.config(text=f"Survival Status: {status}")
+    survival_status.config(text=f"Survival Status: {"ALIVE" if status else "DEAD"}")
 
 
 def restrict_to_number(event):
